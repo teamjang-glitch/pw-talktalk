@@ -228,18 +228,35 @@ export default function AdminPage() {
     setIsDragOver(false);
 
     const text = e.dataTransfer.getData('text');
-    if (text) {
-      // 이메일 추출 (줄바꿈, 쉼표, 공백으로 구분)
-      const emailRegex = /[^\s,;]+@[^\s,;]+\.[^\s,;]+/g;
-      const emails = text.match(emailRegex) || [];
+    processEmailText(text);
+  };
 
-      if (emails.length === 1) {
-        // 단일 이메일인 경우 입력창에 넣기
-        setNewEmail(emails[0]);
-      } else if (emails.length > 1) {
-        // 여러 이메일인 경우 bulk 모드
-        setBulkEmails(emails);
-      }
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData('text');
+    const emailRegex = /[^\s,;]+@[^\s,;]+\.[^\s,;]+/g;
+    const emails = text.match(emailRegex) || [];
+
+    // 여러 이메일이 감지되면 bulk 모드로 전환
+    if (emails.length > 1) {
+      e.preventDefault();
+      processEmailText(text);
+    }
+    // 단일 이메일이면 기본 붙여넣기 동작 허용
+  };
+
+  const processEmailText = (text: string) => {
+    if (!text) return;
+
+    // 이메일 추출 (줄바꿈, 쉼표, 공백으로 구분)
+    const emailRegex = /[^\s,;]+@[^\s,;]+\.[^\s,;]+/g;
+    const emails = text.match(emailRegex) || [];
+
+    if (emails.length === 1) {
+      // 단일 이메일인 경우 입력창에 넣기
+      setNewEmail(emails[0]);
+    } else if (emails.length > 1) {
+      // 여러 이메일인 경우 bulk 모드
+      setBulkEmails(emails);
     }
   };
 
@@ -516,7 +533,8 @@ export default function AdminPage() {
                           type="email"
                           value={newEmail}
                           onChange={(e) => setNewEmail(e.target.value)}
-                          placeholder={isDragOver ? '여기에 드롭하세요' : '이메일 입력 또는 드래그하여 추가'}
+                          onPaste={handlePaste}
+                          placeholder={isDragOver ? '여기에 드롭하세요' : '이메일 입력, 붙여넣기 또는 드래그'}
                           className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                         />
                         {!selectedGroup && (
