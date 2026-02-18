@@ -25,8 +25,15 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user }) {
-      // 모든 로그인 허용 (디버깅용)
-      console.log(`[Auth] 로그인 허용: ${user.email}`);
+      const email = (user.email || '').toLowerCase();
+
+      // @spacecloud.kr 도메인만 허용
+      if (!email.endsWith('@spacecloud.kr')) {
+        console.log(`[Auth] 도메인 불일치로 거부: ${email}`);
+        return false;
+      }
+
+      console.log(`[Auth] 로그인 허용: ${email}`);
       return true;
     },
     async jwt({ token, user }) {
@@ -64,7 +71,6 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     error: '/login',
   },
-  debug: true,
   session: {
     strategy: 'jwt',
     maxAge: 24 * 60 * 60, // 24시간
