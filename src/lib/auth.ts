@@ -18,7 +18,6 @@ export const authOptions: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
       authorization: {
         params: {
-          hd: getAllowedDomain(),
           prompt: 'select_account',
         },
       },
@@ -26,19 +25,8 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async signIn({ user }) {
-      const email = (user.email || '').toLowerCase();
-      const allowedDomain = getAllowedDomain();
-
-      console.log(`[Auth] 로그인 시도: ${email}`);
-
-      // 도메인 체크 - @spacecloud.kr 도메인만 허용
-      if (!email.endsWith(`@${allowedDomain}`)) {
-        console.log(`[Auth] 도메인 불일치: ${email}`);
-        return false;
-      }
-
-      // spacecloud.kr 도메인이면 모두 허용
-      console.log(`[Auth] 로그인 성공: ${email}`);
+      // 모든 로그인 허용 (디버깅용)
+      console.log(`[Auth] 로그인 허용: ${user.email}`);
       return true;
     },
     async jwt({ token, user }) {
@@ -76,6 +64,7 @@ export const authOptions: NextAuthOptions = {
     signIn: '/login',
     error: '/login',
   },
+  debug: true,
   session: {
     strategy: 'jwt',
     maxAge: 24 * 60 * 60, // 24시간
