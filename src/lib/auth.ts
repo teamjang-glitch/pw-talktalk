@@ -27,8 +27,9 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       const email = (user.email || '').toLowerCase();
 
-      // @spacecloud.kr 도메인만 허용
-      if (!email.endsWith('@spacecloud.kr')) {
+      // 허용된 도메인만 로그인 가능
+      const allowedDomain = getAllowedDomain();
+      if (!email.endsWith(`@${allowedDomain}`)) {
         console.log(`[Auth] 도메인 불일치로 거부: ${email}`);
         return false;
       }

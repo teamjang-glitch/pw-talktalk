@@ -54,9 +54,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 이메일 형식 검증
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: '올바른 이메일 형식이 아닙니다.' },
+        { status: 400 }
+      );
+    }
+
     // 도메인 체크
     const allowedDomain = process.env.ALLOWED_DOMAIN || 'spacecloud.kr';
-    if (!email.endsWith(`@${allowedDomain}`)) {
+    if (!email.toLowerCase().endsWith(`@${allowedDomain}`)) {
       return NextResponse.json(
         { error: `@${allowedDomain} 도메인의 이메일만 등록 가능합니다.` },
         { status: 400 }
