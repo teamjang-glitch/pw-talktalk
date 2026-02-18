@@ -28,38 +28,18 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       const email = (user.email || '').toLowerCase();
       const allowedDomain = getAllowedDomain();
-      const adminEmails = getAdminEmails();
 
-      console.log(`[Auth] 로그인 시도: ${email}, 관리자 목록: ${adminEmails.join(', ')}`);
+      console.log(`[Auth] 로그인 시도: ${email}`);
 
-      // 도메인 체크
+      // 도메인 체크 - @spacecloud.kr 도메인만 허용
       if (!email.endsWith(`@${allowedDomain}`)) {
         console.log(`[Auth] 도메인 불일치: ${email}`);
         return false;
       }
 
-      // 어드민은 항상 허용
-      if (adminEmails.includes(email)) {
-        console.log(`[Auth] 어드민 로그인: ${email}`);
-        return true;
-      }
-
-      // 멤버 목록에 등록된 사용자만 허용
-      try {
-        const members = await getMembers();
-        const isMember = members.some(m => m.email.toLowerCase() === email);
-
-        if (!isMember) {
-          console.log(`[Auth] 미등록 사용자: ${email}`);
-          return false;
-        }
-
-        console.log(`[Auth] 멤버 로그인: ${email}`);
-        return true;
-      } catch (error) {
-        console.error('[Auth] 멤버 확인 오류:', error);
-        return false;
-      }
+      // spacecloud.kr 도메인이면 모두 허용
+      console.log(`[Auth] 로그인 성공: ${email}`);
+      return true;
     },
     async jwt({ token, user }) {
       if (user) {
