@@ -40,6 +40,8 @@ export default function AdminPage() {
   const [newGroup, setNewGroup] = useState<typeof GROUPS[number]>(GROUPS[0]);
   const [addingMember, setAddingMember] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [bulkEmails, setBulkEmails] = useState<string[]>([]);
 
   // 로그 상태
   const [logs, setLogs] = useState<SearchLog[]>([]);
@@ -210,6 +212,68 @@ export default function AdminPage() {
     }
   };
 
+  // 드래그 앤 드롭 핸들러
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const text = e.dataTransfer.getData('text');
+    if (text) {
+      // 이메일 추출 (줄바꿈, 쉼표, 공백으로 구분)
+      const emailRegex = /[^\s,;]+@[^\s,;]+\.[^\s,;]+/g;
+      const emails = text.match(emailRegex) || [];
+
+      if (emails.length === 1) {
+        // 단일 이메일인 경우 입력창에 넣기
+        setNewEmail(emails[0]);
+      } else if (emails.length > 1) {
+        // 여러 이메일인 경우 bulk 모드
+        setBulkEmails(emails);
+      }
+    }
+  };
+
+  const handleBulkAdd = async () => {
+    if (bulkEmails.length === 0) return;
+
+    setAddingMember(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const email of bulkEmails) {
+      try {
+        const res = await fetch('/api/admin/members', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, group: selectedGroup || newGroup }),
+        });
+
+        if (res.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      } catch {
+        failCount++;
+      }
+    }
+
+    alert(`${successCount}명 추가 완료${failCount > 0 ? `, ${failCount}명 실패` : ''}`);
+    setBulkEmails([]);
+    fetchMembers();
+    setAddingMember(false);
+  };
+
   const handleDeleteMember = async (email: string, group: string) => {
     if (!confirm(`${email}(${group})을(를) 삭제하시겠습니까?`)) return;
 
@@ -378,37 +442,112 @@ export default function AdminPage() {
                 </div>
 
                 {/* 멤버 추가 폼 */}
-                <div className="px-6 py-4 bg-gray-50 border-b border-gray-100">
-                  <div className="flex gap-3">
-                    <input
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
-                      placeholder="이메일 (예: user@spacecloud.kr)"
-                      className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                    />
-                    {!selectedGroup && (
-                      <select
-                        value={newGroup}
-                        onChange={(e) => setNewGroup(e.target.value as typeof GROUPS[number])}
-                        className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
-                      >
-                        {GROUPS.map((group) => (
-                          <option key={group} value={group}>
-                            {group}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <button
-                      onClick={handleAddMember}
-                      disabled={addingMember || !newEmail.trim()}
-                      className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
-                    >
-                      <Plus className="w-4 h-4" />
-                      {selectedGroup ? `${selectedGroup}에 추가` : '추가'}
-                    </button>
-                  </div>
+                <div
+                  className={`px-6 py-4 border-b transition-colors ${
+                    isDragOver
+                      ? 'bg-primary-50 border-primary-300 border-2 border-dashed'
+                      : 'bg-gray-50 border-gray-100'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  {bulkEmails.length > 0 ? (
+                    // 여러 이메일 드롭된 경우
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-medium text-gray-700">
+                          {bulkEmails.length}개의 이메일이 감지되었습니다
+                        </p>
+                        <button
+                          onClick={() => setBulkEmails([])}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-32 overflow-y-auto bg-white rounded-lg border border-gray-200 p-3">
+                        <div className="flex flex-wrap gap-2">
+                          {bulkEmails.map((email, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-primary-100 text-primary-700 text-sm rounded-full"
+                            >
+                              {email}
+                              <button
+                                onClick={() => setBulkEmails(prev => prev.filter((_, i) => i !== idx))}
+                                className="hover:text-primary-900"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        {!selectedGroup && (
+                          <select
+                            value={newGroup}
+                            onChange={(e) => setNewGroup(e.target.value as typeof GROUPS[number])}
+                            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                          >
+                            {GROUPS.map((group) => (
+                              <option key={group} value={group}>
+                                {group}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <button
+                          onClick={handleBulkAdd}
+                          disabled={addingMember}
+                          className="flex-1 flex items-center justify-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {addingMember ? '추가 중...' : `${bulkEmails.length}명 일괄 추가`}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // 일반 입력 모드
+                    <>
+                      <div className="flex gap-3">
+                        <input
+                          type="email"
+                          value={newEmail}
+                          onChange={(e) => setNewEmail(e.target.value)}
+                          placeholder={isDragOver ? '여기에 드롭하세요' : '이메일 입력 또는 드래그하여 추가'}
+                          className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                        />
+                        {!selectedGroup && (
+                          <select
+                            value={newGroup}
+                            onChange={(e) => setNewGroup(e.target.value as typeof GROUPS[number])}
+                            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
+                          >
+                            {GROUPS.map((group) => (
+                              <option key={group} value={group}>
+                                {group}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <button
+                          onClick={handleAddMember}
+                          disabled={addingMember || !newEmail.trim()}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          {selectedGroup ? `${selectedGroup}에 추가` : '추가'}
+                        </button>
+                      </div>
+                      {isDragOver && (
+                        <p className="text-center text-primary-600 text-sm mt-2">
+                          이메일 목록을 드롭하여 일괄 추가
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 {/* 멤버 목록 */}
