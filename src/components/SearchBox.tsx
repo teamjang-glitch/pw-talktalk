@@ -14,7 +14,6 @@ import {
   Key,
   FileText,
   User,
-  TrendingUp,
   Star,
   Plus,
 } from 'lucide-react';
@@ -27,8 +26,6 @@ export function SearchBox() {
   const [selectedService, setSelectedService] = useState<ServiceData | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [popularServices, setPopularServices] = useState<ServiceData[]>([]);
-  const [loadingPopular, setLoadingPopular] = useState(true);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [favoriteServices, setFavoriteServices] = useState<ServiceData[]>([]);
   const [loadingFavorites, setLoadingFavorites] = useState(true);
@@ -66,22 +63,6 @@ export function SearchBox() {
   useEffect(() => {
     setShowPassword(false);
   }, [selectedService]);
-
-  // 인기 서비스 로드
-  useEffect(() => {
-    const fetchPopular = async () => {
-      try {
-        const res = await fetch('/api/popular');
-        const data = await res.json();
-        setPopularServices(data.services || []);
-      } catch (error) {
-        console.error('Popular services error:', error);
-      } finally {
-        setLoadingPopular(false);
-      }
-    };
-    fetchPopular();
-  }, []);
 
   // 즐겨찾기 로드
   const loadFavorites = useCallback(async () => {
@@ -515,62 +496,6 @@ export function SearchBox() {
                 <Star className="w-10 h-10 mx-auto mb-2 text-gray-300" />
                 <p className="text-sm">즐겨찾기한 서비스가 없습니다</p>
                 <p className="text-xs mt-1">검색 후 별표를 클릭하거나 위 추가 버튼을 눌러보세요</p>
-              </div>
-            )}
-          </div>
-
-          {/* 자주 찾는 서비스 섹션 */}
-          <div>
-            <div className="flex items-center gap-2 mb-4">
-              <TrendingUp className="w-5 h-5 text-primary-500" />
-              <h2 className="text-lg font-semibold text-gray-700">자주 찾는 서비스</h2>
-            </div>
-
-            {loadingPopular ? (
-              <div className="flex justify-center py-8">
-                <div className="w-6 h-6 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : popularServices.length > 0 ? (
-              <div className="grid grid-cols-3 gap-4">
-                {popularServices.map((service) => (
-                  <div
-                    key={service.id}
-                    onClick={() => {
-                      setSelectedService(service);
-                      setResults([service]);
-                    }}
-                    className="bg-white rounded-xl border border-gray-200 p-4 cursor-pointer hover:shadow-md hover:border-primary-300 transition-all relative group"
-                  >
-                    <button
-                      onClick={(e) => toggleFavorite(service, e)}
-                      className={`absolute top-2 right-2 p-1 rounded transition-all ${
-                        favorites.has(service.id)
-                          ? 'text-yellow-500'
-                          : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:text-yellow-500'
-                      }`}
-                      title={favorites.has(service.id) ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                    >
-                      <Star className={`w-4 h-4 ${favorites.has(service.id) ? 'fill-current' : ''}`} />
-                    </button>
-                    <h3 className="font-semibold text-gray-800 truncate mb-1 pr-6">
-                      {service.serviceName}
-                    </h3>
-                    <p className="text-xs text-gray-500 truncate">
-                      {service.url || '-'}
-                    </p>
-                    {service.usage && (
-                      <p className="text-xs text-gray-400 mt-2 truncate">
-                        {service.usage}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-400">
-                <Key className="w-10 h-10 mx-auto mb-2 text-gray-200" />
-                <p>서비스명 또는 URL을 검색하세요</p>
-                <p className="text-sm mt-1">예: AWS, github, figma, notion 등</p>
               </div>
             )}
           </div>
