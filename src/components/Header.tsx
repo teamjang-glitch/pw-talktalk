@@ -2,18 +2,25 @@
 
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { LogOut, Shield, Key } from 'lucide-react';
 
 export function Header() {
   const { data: session } = useSession();
+  const router = useRouter();
+
+  const handleLogoClick = () => {
+    // 검색 상태 초기화를 위해 페이지 새로고침
+    window.location.href = '/';
+  };
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2">
+        <button onClick={handleLogoClick} className="flex items-center gap-2">
           <Key className="w-6 h-6 text-primary-600" />
           <span className="font-bold text-xl text-gray-800">비번톡톡</span>
-        </Link>
+        </button>
 
         <div className="flex items-center gap-4">
           {session ? (
