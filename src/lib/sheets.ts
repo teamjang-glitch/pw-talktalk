@@ -144,24 +144,114 @@ export async function refreshCache(): Promise<void> {
 }
 
 // ============ 멤버 관리 ============
+// 멤버 캐시
+let cachedMembers: Member[] | null = null;
+let membersCacheTimestamp: number = 0;
+const MEMBERS_CACHE_DURATION = 60 * 1000; // 1분 캐시
+
 export async function getMembers(): Promise<Member[]> {
-  return mockMembers;
+  if (USE_MOCK) {
+    return mockMembers;
+  }
+
+  // 캐시 확인
+  const now = Date.now();
+  if (cachedMembers && (now - membersCacheTimestamp) < MEMBERS_CACHE_DURATION) {
+    return cachedMembers;
+  }
+
+  try {
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=getMembers`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const members: Member[] = result.members || [];
+    cachedMembers = members;
+    membersCacheTimestamp = now;
+    return members;
+  } catch (error) {
+    console.error('멤버 조회 오류:', error);
+    if (cachedMembers) {
+      return cachedMembers;
+    }
+    return mockMembers;
+  }
 }
 
 export async function getUserGroups(email: string): Promise<string[]> {
-  return mockMembers
+  const members = await getMembers();
+  return members
     .filter((member) => member.email.toLowerCase() === email.toLowerCase())
     .map((member) => member.group);
 }
 
 export async function addMember(email: string, group: string): Promise<void> {
-  mockMembers.push({ email, group });
+  if (USE_MOCK) {
+    mockMembers.push({ email, group });
+    return;
+  }
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addMember',
+        email,
+        group,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
+    }
+
+    // 캐시 무효화
+    cachedMembers = null;
+    membersCacheTimestamp = 0;
+  } catch (error) {
+    console.error('멤버 추가 오류:', error);
+    throw error;
+  }
 }
 
 export async function deleteMember(email: string, group: string): Promise<void> {
-  mockMembers = mockMembers.filter(
-    (m) => !(m.email === email && m.group === group)
-  );
+  if (USE_MOCK) {
+    mockMembers = mockMembers.filter(
+      (m) => !(m.email === email && m.group === group)
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'deleteMember',
+        email,
+        group,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
+    }
+
+    // 캐시 무효화
+    cachedMembers = null;
+    membersCacheTimestamp = 0;
+  } catch (error) {
+    console.error('멤버 삭제 오류:', error);
+    throw error;
+  }
 }
 
 // ============ 로그 관리 ============
