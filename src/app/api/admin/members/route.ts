@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, isAdmin } from '@/lib/auth';
-import { getMembers, addMember, deleteMember } from '@/lib/sheets';
+import { getMembers, addMember, deleteMember, addAdminLog } from '@/lib/sheets';
 
 const SKIP_AUTH = process.env.SKIP_AUTH === 'true';
+
+// 프로덕션 환경에서 SKIP_AUTH 사용 차단
+if (process.env.NODE_ENV === 'production' && SKIP_AUTH) {
+  throw new Error('SKIP_AUTH는 프로덕션에서 사용할 수 없습니다.');
+}
 
 // 멤버 목록 조회
 export async function GET() {
@@ -33,6 +38,8 @@ export async function GET() {
 // 멤버 추가
 export async function POST(request: NextRequest) {
   try {
+    let adminEmail = 'system';
+
     if (!SKIP_AUTH) {
       const session = await getServerSession(authOptions);
 
@@ -42,10 +49,30 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+      adminEmail = session.user.email;
     }
 
     const body = await request.json();
-    const { email, group } = body;
+    const { email, group, emails } = body;
+
+    // 대량 추가 처리
+    if (emails && Array.isArray(emails)) {
+      const ip = request.headers.get('x-forwarded-for') || 'unknown';
+
+      for (const memberEmail of emails) {
+        await addMember(memberEmail, group);
+      }
+
+      await addAdminLog({
+        adminEmail,
+        action: 'BULK_MEMBER_ADD',
+        targetGroup: group,
+        details: `${emails.length}명 추가: ${emails.slice(0, 3).join(', ')}${emails.length > 3 ? '...' : ''}`,
+        ip,
+      });
+
+      return NextResponse.json({ success: true, count: emails.length });
+    }
 
     if (!email || !group) {
       return NextResponse.json(
@@ -73,6 +100,17 @@ export async function POST(request: NextRequest) {
     }
 
     await addMember(email, group);
+
+    // 관리자 액션 로그 기록
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    await addAdminLog({
+      adminEmail,
+      action: 'MEMBER_ADD',
+      targetEmail: email,
+      targetGroup: group,
+      ip,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Add member error:', error);
@@ -86,6 +124,8 @@ export async function POST(request: NextRequest) {
 // 멤버 삭제
 export async function DELETE(request: NextRequest) {
   try {
+    let adminEmail = 'system';
+
     if (!SKIP_AUTH) {
       const session = await getServerSession(authOptions);
 
@@ -95,6 +135,7 @@ export async function DELETE(request: NextRequest) {
           { status: 403 }
         );
       }
+      adminEmail = session.user.email;
     }
 
     const body = await request.json();
@@ -108,6 +149,17 @@ export async function DELETE(request: NextRequest) {
     }
 
     await deleteMember(email, group);
+
+    // 관리자 액션 로그 기록
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    await addAdminLog({
+      adminEmail,
+      action: 'MEMBER_DELETE',
+      targetEmail: email,
+      targetGroup: group,
+      ip,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Delete member error:', error);

@@ -4,9 +4,15 @@ import { authOptions, isAdmin } from '@/lib/auth';
 import {
   getServicesWithPermissions,
   setServicePermission,
+  addAdminLog,
 } from '@/lib/sheets';
 
 const SKIP_AUTH = process.env.SKIP_AUTH === 'true';
+
+// 프로덕션 환경에서 SKIP_AUTH 사용 차단
+if (process.env.NODE_ENV === 'production' && SKIP_AUTH) {
+  throw new Error('SKIP_AUTH는 프로덕션에서 사용할 수 없습니다.');
+}
 
 // 서비스 목록 + 권한 조회
 export async function GET() {
@@ -36,6 +42,8 @@ export async function GET() {
 // 서비스 권한 설정
 export async function POST(request: NextRequest) {
   try {
+    let adminEmail = 'system';
+
     if (!SKIP_AUTH) {
       const session = await getServerSession(authOptions);
 
@@ -45,6 +53,7 @@ export async function POST(request: NextRequest) {
           { status: 403 }
         );
       }
+      adminEmail = session.user.email;
     }
 
     const body = await request.json();
@@ -58,6 +67,18 @@ export async function POST(request: NextRequest) {
     }
 
     await setServicePermission(serviceId, allowedGroups || []);
+
+    // 관리자 액션 로그 기록
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    const groups = allowedGroups || [];
+    await addAdminLog({
+      adminEmail,
+      action: 'PERMISSION_UPDATE',
+      targetServiceId: serviceId,
+      details: groups.length > 0 ? `허용 그룹: ${groups.join(', ')}` : '전체 접근 허용',
+      ip,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Set permission error:', error);

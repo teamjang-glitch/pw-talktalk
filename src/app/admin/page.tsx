@@ -20,10 +20,12 @@ import {
   Unlock,
   Star,
   TrendingUp,
+  ClipboardList,
+  UserCog,
 } from 'lucide-react';
-import { Member, SearchLog, GROUPS, ServiceData } from '@/types';
+import { Member, SearchLog, GROUPS, ServiceData, AdminLog } from '@/types';
 
-type Tab = 'members' | 'permissions' | 'favorites' | 'logs';
+type Tab = 'members' | 'permissions' | 'favorites' | 'logs' | 'audit';
 
 interface ServiceWithPermission extends ServiceData {
   allowedGroups: string[];
@@ -68,6 +70,10 @@ export default function AdminPage() {
   const [loadingFavorites, setLoadingFavorites] = useState(false);
   const [expandedFavorite, setExpandedFavorite] = useState<string | null>(null);
 
+  // 감사 로그 상태
+  const [auditLogs, setAuditLogs] = useState<AdminLog[]>([]);
+  const [loadingAudit, setLoadingAudit] = useState(false);
+
   const isAdmin = skipAuth === true || (session?.user as any)?.isAdmin;
 
   useEffect(() => {
@@ -101,6 +107,8 @@ export default function AdminPage() {
         fetchServices();
       } else if (activeTab === 'favorites') {
         fetchFavoriteStats();
+      } else if (activeTab === 'audit') {
+        fetchAuditLogs();
       } else {
         fetchLogs();
       }
@@ -143,6 +151,43 @@ export default function AdminPage() {
       console.error('Fetch favorite stats error:', error);
     } finally {
       setLoadingFavorites(false);
+    }
+  };
+
+  const fetchAuditLogs = async () => {
+    setLoadingAudit(true);
+    try {
+      const res = await fetch('/api/admin/audit?limit=100');
+      const data = await res.json();
+      setAuditLogs(data.logs || []);
+    } catch (error) {
+      console.error('Fetch audit logs error:', error);
+    } finally {
+      setLoadingAudit(false);
+    }
+  };
+
+  const getActionLabel = (action: string): string => {
+    const labels: Record<string, string> = {
+      'MEMBER_ADD': '멤버 추가',
+      'MEMBER_DELETE': '멤버 삭제',
+      'PERMISSION_UPDATE': '권한 수정',
+      'BULK_MEMBER_ADD': '대량 멤버 추가',
+    };
+    return labels[action] || action;
+  };
+
+  const getActionColor = (action: string): string => {
+    switch (action) {
+      case 'MEMBER_ADD':
+      case 'BULK_MEMBER_ADD':
+        return 'bg-green-100 text-green-700';
+      case 'MEMBER_DELETE':
+        return 'bg-red-100 text-red-700';
+      case 'PERMISSION_UPDATE':
+        return 'bg-blue-100 text-blue-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
     }
   };
 
@@ -413,6 +458,17 @@ export default function AdminPage() {
           >
             <FileText className="w-4 h-4" />
             조회 로그
+          </button>
+          <button
+            onClick={() => setActiveTab('audit')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'audit'
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            감사 로그
           </button>
         </div>
 
@@ -1028,6 +1084,104 @@ export default function AdminPage() {
                           ) : (
                             <XCircle className="w-5 h-5 text-red-500 inline" />
                           )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 감사 로그 탭 */}
+        {activeTab === 'audit' && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <UserCog className="w-5 h-5 text-primary-500" />
+                <h2 className="text-lg font-semibold">관리자 활동 로그</h2>
+                <span className="text-sm text-gray-500">
+                  (최근 100건)
+                </span>
+              </div>
+              <button
+                onClick={fetchAuditLogs}
+                disabled={loadingAudit}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${loadingAudit ? 'animate-spin' : ''}`}
+                />
+              </button>
+            </div>
+
+            {loadingAudit ? (
+              <div className="p-8 text-center text-gray-500">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                로딩 중...
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">
+                <ClipboardList className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium">아직 관리자 활동 기록이 없습니다</p>
+                <p className="text-sm mt-1">멤버 추가/삭제, 권한 변경 시 자동으로 기록됩니다</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">
+                        일시
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">
+                        관리자
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">
+                        작업
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">
+                        대상
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">
+                        상세
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-medium text-gray-500">
+                        IP
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {auditLogs.map((log, index) => (
+                      <tr key={`${log.timestamp}-${index}`} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                          {new Date(log.timestamp).toLocaleString('ko-KR')}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-800">
+                          {log.adminEmail}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getActionColor(log.action)}`}>
+                            {getActionLabel(log.action)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-800">
+                          {log.targetEmail && (
+                            <span className="block">{log.targetEmail}</span>
+                          )}
+                          {log.targetGroup && (
+                            <span className="text-xs text-gray-500">{log.targetGroup}</span>
+                          )}
+                          {log.targetServiceId && (
+                            <span className="text-xs text-gray-500">서비스: {log.targetServiceId}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600 max-w-xs truncate">
+                          {log.details || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-500 font-mono">
+                          {log.ip || '-'}
                         </td>
                       </tr>
                     ))}

@@ -65,3 +65,21 @@ export interface Favorite {
   serviceName: string;     // 서비스명 (검색용)
   createdAt: string;       // 등록일시
 }
+
+// 관리자 액션 로그
+export interface AdminLog {
+  timestamp: string;       // 실행 시간
+  adminEmail: string;      // 관리자 이메일
+  action: AdminAction;     // 액션 타입
+  targetEmail?: string;    // 대상 이메일 (멤버 관련)
+  targetGroup?: string;    // 대상 그룹
+  targetServiceId?: string; // 대상 서비스 (권한 관련)
+  details?: string;        // 추가 정보
+  ip?: string;             // IP 주소
+}
+
+export type AdminAction =
+  | 'MEMBER_ADD'           // 멤버 추가
+  | 'MEMBER_DELETE'        // 멤버 삭제
+  | 'PERMISSION_UPDATE'    // 서비스 권한 수정
+  | 'BULK_MEMBER_ADD';     // 대량 멤버 추가

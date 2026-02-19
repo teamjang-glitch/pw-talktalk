@@ -1,4 +1,4 @@
-import { ServiceData, Member, SearchLog, ServicePermission, Favorite } from '@/types';
+import { ServiceData, Member, SearchLog, ServicePermission, Favorite, AdminLog, AdminAction } from '@/types';
 
 // Google Apps Script API URL
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
@@ -479,4 +479,43 @@ export async function getFavoriteStats(): Promise<{ serviceId: string; serviceNa
     console.error('즐겨찾기 통계 조회 오류:', error);
     return [];
   }
+}
+
+// ============ 관리자 액션 로그 ============
+let adminLogs: AdminLog[] = [];
+
+// 관리자 액션 로그 추가
+export async function addAdminLog(log: Omit<AdminLog, 'timestamp'>): Promise<void> {
+  const newLog: AdminLog = {
+    ...log,
+    timestamp: new Date().toISOString(),
+  };
+
+  adminLogs.unshift(newLog);
+
+  // 최대 1000개 로그 유지
+  if (adminLogs.length > 1000) {
+    adminLogs = adminLogs.slice(0, 1000);
+  }
+
+  console.log(`[Admin Log] ${log.action} by ${log.adminEmail}`, {
+    target: log.targetEmail || log.targetServiceId,
+    details: log.details,
+  });
+}
+
+// 관리자 액션 로그 조회
+export async function getAdminLogs(limit = 100): Promise<AdminLog[]> {
+  return adminLogs.slice(0, limit);
+}
+
+// 액션 타입별 한글 라벨
+export function getActionLabel(action: AdminAction): string {
+  const labels: Record<AdminAction, string> = {
+    'MEMBER_ADD': '멤버 추가',
+    'MEMBER_DELETE': '멤버 삭제',
+    'PERMISSION_UPDATE': '권한 수정',
+    'BULK_MEMBER_ADD': '대량 멤버 추가',
+  };
+  return labels[action] || action;
 }

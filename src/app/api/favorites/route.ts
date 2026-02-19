@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getFavorites, addFavorite, removeFavorite, getFavoriteServices, getServices } from '@/lib/sheets';
+import { checkRateLimit, getClientIP, getRateLimitHeaders } from '@/lib/rate-limit';
 
 // GET: 즐겨찾기 목록 조회
 export async function GET(request: NextRequest) {
+  // Rate Limit 체크
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, 'favorites');
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+      {
+        status: 429,
+        headers: getRateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 });
@@ -31,6 +46,20 @@ export async function GET(request: NextRequest) {
 
 // POST: 즐겨찾기 추가
 export async function POST(request: NextRequest) {
+  // Rate Limit 체크
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, 'favorites');
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+      {
+        status: 429,
+        headers: getRateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 });
@@ -62,6 +91,20 @@ export async function POST(request: NextRequest) {
 
 // DELETE: 즐겨찾기 삭제
 export async function DELETE(request: NextRequest) {
+  // Rate Limit 체크
+  const clientIP = getClientIP(request);
+  const rateLimitResult = checkRateLimit(clientIP, 'favorites');
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+      {
+        status: 429,
+        headers: getRateLimitHeaders(rateLimitResult),
+      }
+    );
+  }
+
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ error: '로그인이 필요합니다' }, { status: 401 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions, isAdmin } from '@/lib/auth';
-import { getLogs } from '@/lib/sheets';
+import { getAdminLogs } from '@/lib/sheets';
 
 const SKIP_AUTH = process.env.SKIP_AUTH === 'true';
 
@@ -10,6 +10,7 @@ if (process.env.NODE_ENV === 'production' && SKIP_AUTH) {
   throw new Error('SKIP_AUTH는 프로덕션에서 사용할 수 없습니다.');
 }
 
+// 관리자 액션 로그 조회
 export async function GET(request: NextRequest) {
   try {
     if (!SKIP_AUTH) {
@@ -26,12 +27,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '100', 10);
 
-    const logs = await getLogs(limit);
+    const logs = await getAdminLogs(limit);
     return NextResponse.json({ logs });
   } catch (error) {
-    console.error('Get logs error:', error);
+    console.error('Get admin logs error:', error);
     return NextResponse.json(
-      { error: '로그 조회 중 오류가 발생했습니다.' },
+      { error: '관리자 로그 조회 중 오류가 발생했습니다.' },
       { status: 500 }
     );
   }
