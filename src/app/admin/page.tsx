@@ -18,13 +18,22 @@ import {
   Search,
   Lock,
   Unlock,
+  Star,
+  TrendingUp,
 } from 'lucide-react';
 import { Member, SearchLog, GROUPS, ServiceData } from '@/types';
 
-type Tab = 'members' | 'permissions' | 'logs';
+type Tab = 'members' | 'permissions' | 'favorites' | 'logs';
 
 interface ServiceWithPermission extends ServiceData {
   allowedGroups: string[];
+}
+
+interface FavoriteStat {
+  serviceId: string;
+  serviceName: string;
+  count: number;
+  users: string[];
 }
 
 export default function AdminPage() {
@@ -53,6 +62,11 @@ export default function AdminPage() {
   const [selectedService, setSelectedService] = useState<ServiceWithPermission | null>(null);
   const [serviceSearch, setServiceSearch] = useState('');
   const [savingPermission, setSavingPermission] = useState(false);
+
+  // 즐겨찾기 통계 상태
+  const [favoriteStats, setFavoriteStats] = useState<FavoriteStat[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+  const [expandedFavorite, setExpandedFavorite] = useState<string | null>(null);
 
   const isAdmin = skipAuth === true || (session?.user as any)?.isAdmin;
 
@@ -85,6 +99,8 @@ export default function AdminPage() {
         fetchMembers();
       } else if (activeTab === 'permissions') {
         fetchServices();
+      } else if (activeTab === 'favorites') {
+        fetchFavoriteStats();
       } else {
         fetchLogs();
       }
@@ -114,6 +130,19 @@ export default function AdminPage() {
       console.error('Fetch services error:', error);
     } finally {
       setLoadingServices(false);
+    }
+  };
+
+  const fetchFavoriteStats = async () => {
+    setLoadingFavorites(true);
+    try {
+      const res = await fetch('/api/admin/favorites');
+      const data = await res.json();
+      setFavoriteStats(data.stats || []);
+    } catch (error) {
+      console.error('Fetch favorite stats error:', error);
+    } finally {
+      setLoadingFavorites(false);
     }
   };
 
@@ -362,6 +391,17 @@ export default function AdminPage() {
           >
             <Shield className="w-4 h-4" />
             권한 관리
+          </button>
+          <button
+            onClick={() => setActiveTab('favorites')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeTab === 'favorites'
+                ? 'bg-primary-600 text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Star className="w-4 h-4" />
+            즐겨찾기 통계
           </button>
           <button
             onClick={() => setActiveTab('logs')}
@@ -823,6 +863,103 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* 즐겨찾기 통계 탭 */}
+        {activeTab === 'favorites' && (
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-primary-500" />
+                <h2 className="text-lg font-semibold">멤버별 즐겨찾기 순위</h2>
+                <span className="text-sm text-gray-500">
+                  (총 {favoriteStats.reduce((sum, s) => sum + s.count, 0)}개)
+                </span>
+              </div>
+              <button
+                onClick={fetchFavoriteStats}
+                disabled={loadingFavorites}
+                className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <RefreshCw
+                  className={`w-4 h-4 ${loadingFavorites ? 'animate-spin' : ''}`}
+                />
+              </button>
+            </div>
+
+            {loadingFavorites ? (
+              <div className="p-8 text-center text-gray-500">
+                <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
+                로딩 중...
+              </div>
+            ) : favoriteStats.length === 0 ? (
+              <div className="p-12 text-center text-gray-500">
+                <Star className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium">아직 즐겨찾기가 없습니다</p>
+                <p className="text-sm mt-1">멤버들이 즐겨찾기를 추가하면 여기에 통계가 표시됩니다</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {favoriteStats.map((stat, index) => (
+                  <div key={stat.serviceId} className="hover:bg-gray-50 transition-colors">
+                    <button
+                      onClick={() => setExpandedFavorite(
+                        expandedFavorite === stat.serviceId ? null : stat.serviceId
+                      )}
+                      className="w-full px-6 py-4 flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* 순위 */}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                          index === 1 ? 'bg-gray-100 text-gray-600' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-gray-50 text-gray-500'
+                        }`}>
+                          {index + 1}
+                        </div>
+
+                        {/* 서비스 정보 */}
+                        <div>
+                          <p className="font-semibold text-gray-800">{stat.serviceName}</p>
+                          <p className="text-sm text-gray-500">{stat.count}명이 즐겨찾기</p>
+                        </div>
+                      </div>
+
+                      {/* 펼치기 아이콘 */}
+                      <ChevronRight className={`w-5 h-5 text-gray-400 transition-transform ${
+                        expandedFavorite === stat.serviceId ? 'rotate-90' : ''
+                      }`} />
+                    </button>
+
+                    {/* 펼친 상태: 사용자 목록 */}
+                    {expandedFavorite === stat.serviceId && (
+                      <div className="px-6 pb-4">
+                        <div className="ml-12 p-4 bg-gray-50 rounded-lg">
+                          <p className="text-sm font-medium text-gray-600 mb-3">즐겨찾기한 멤버:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {stat.users.map((email) => (
+                              <span
+                                key={email}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-sm"
+                              >
+                                <div className="w-5 h-5 rounded-full bg-primary-100 flex items-center justify-center">
+                                  <span className="text-primary-700 font-medium text-xs">
+                                    {email.charAt(0).toUpperCase()}
+                                  </span>
+                                </div>
+                                {email}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

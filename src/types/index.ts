@@ -57,3 +57,11 @@ export const GROUPS = [
 ] as const;
 
 export type GroupType = typeof GROUPS[number];
+
+// 즐겨찾기
+export interface Favorite {
+  email: string;           // 사용자 이메일
+  serviceId: string;       // 서비스 ID
+  serviceName: string;     // 서비스명 (검색용)
+  createdAt: string;       // 등록일시
+}

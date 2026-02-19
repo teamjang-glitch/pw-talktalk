@@ -1,4 +1,4 @@
-import { ServiceData, Member, SearchLog, ServicePermission } from '@/types';
+import { ServiceData, Member, SearchLog, ServicePermission, Favorite } from '@/types';
 
 // Google Apps Script API URL
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL || '';
@@ -274,4 +274,81 @@ export async function getServicesWithPermissions(): Promise<(ServiceData & { all
     ...service,
     allowedGroups: servicePermissions.get(service.id) || [],
   }));
+}
+
+// ============ 즐겨찾기 관리 ============
+let mockFavorites: Favorite[] = [];
+
+// 사용자의 즐겨찾기 목록 조회
+export async function getFavorites(email: string): Promise<Favorite[]> {
+  return mockFavorites
+    .filter(f => f.email.toLowerCase() === email.toLowerCase())
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+// 즐겨찾기 추가
+export async function addFavorite(email: string, serviceId: string, serviceName: string): Promise<void> {
+  // 중복 체크
+  const exists = mockFavorites.some(
+    f => f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId
+  );
+  if (!exists) {
+    mockFavorites.push({
+      email: email.toLowerCase(),
+      serviceId,
+      serviceName,
+      createdAt: new Date().toISOString(),
+    });
+  }
+}
+
+// 즐겨찾기 삭제
+export async function removeFavorite(email: string, serviceId: string): Promise<void> {
+  mockFavorites = mockFavorites.filter(
+    f => !(f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId)
+  );
+}
+
+// 사용자가 해당 서비스를 즐겨찾기했는지 확인
+export async function isFavorite(email: string, serviceId: string): Promise<boolean> {
+  return mockFavorites.some(
+    f => f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId
+  );
+}
+
+// 사용자의 즐겨찾기 서비스 데이터 조회
+export async function getFavoriteServices(email: string): Promise<ServiceData[]> {
+  const favorites = await getFavorites(email);
+  const services = await getServices();
+
+  const favoriteServiceIds = new Set(favorites.map(f => f.serviceId));
+  return services.filter(service => favoriteServiceIds.has(service.id));
+}
+
+// 전체 즐겨찾기 통계 (어드민용)
+export async function getFavoriteStats(): Promise<{ serviceId: string; serviceName: string; count: number; users: string[] }[]> {
+  const stats = new Map<string, { serviceName: string; count: number; users: string[] }>();
+
+  mockFavorites.forEach(f => {
+    const existing = stats.get(f.serviceId);
+    if (existing) {
+      existing.count++;
+      existing.users.push(f.email);
+    } else {
+      stats.set(f.serviceId, {
+        serviceName: f.serviceName,
+        count: 1,
+        users: [f.email],
+      });
+    }
+  });
+
+  return Array.from(stats.entries())
+    .map(([serviceId, data]) => ({
+      serviceId,
+      serviceName: data.serviceName,
+      count: data.count,
+      users: data.users,
+    }))
+    .sort((a, b) => b.count - a.count);
 }
