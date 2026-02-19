@@ -277,43 +277,141 @@ export async function getServicesWithPermissions(): Promise<(ServiceData & { all
 }
 
 // ============ 즐겨찾기 관리 ============
+// Mock 데이터 (API 연동 실패 시 폴백)
 let mockFavorites: Favorite[] = [];
+
+// 즐겨찾기 캐시
+let cachedFavorites: Map<string, Favorite[]> = new Map();
+let favoritesCacheTimestamp: Map<string, number> = new Map();
+const FAVORITES_CACHE_DURATION = 60 * 1000; // 1분 캐시
 
 // 사용자의 즐겨찾기 목록 조회
 export async function getFavorites(email: string): Promise<Favorite[]> {
-  return mockFavorites
-    .filter(f => f.email.toLowerCase() === email.toLowerCase())
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (USE_MOCK) {
+    return mockFavorites
+      .filter(f => f.email.toLowerCase() === email.toLowerCase())
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  // 캐시 확인
+  const now = Date.now();
+  const cacheKey = email.toLowerCase();
+  const cachedTime = favoritesCacheTimestamp.get(cacheKey) || 0;
+
+  if (cachedFavorites.has(cacheKey) && (now - cachedTime) < FAVORITES_CACHE_DURATION) {
+    return cachedFavorites.get(cacheKey) || [];
+  }
+
+  try {
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=getFavorites&email=${encodeURIComponent(email)}`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const favorites = result.favorites || [];
+
+    // 캐시 저장
+    cachedFavorites.set(cacheKey, favorites);
+    favoritesCacheTimestamp.set(cacheKey, now);
+
+    return favorites;
+  } catch (error) {
+    console.error('즐겨찾기 조회 오류:', error);
+    // 캐시가 있으면 반환
+    if (cachedFavorites.has(cacheKey)) {
+      return cachedFavorites.get(cacheKey) || [];
+    }
+    return [];
+  }
 }
 
 // 즐겨찾기 추가
 export async function addFavorite(email: string, serviceId: string, serviceName: string): Promise<void> {
-  // 중복 체크
-  const exists = mockFavorites.some(
-    f => f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId
-  );
-  if (!exists) {
-    mockFavorites.push({
-      email: email.toLowerCase(),
-      serviceId,
-      serviceName,
-      createdAt: new Date().toISOString(),
+  if (USE_MOCK) {
+    const exists = mockFavorites.some(
+      f => f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId
+    );
+    if (!exists) {
+      mockFavorites.push({
+        email: email.toLowerCase(),
+        serviceId,
+        serviceName,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    return;
+  }
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'addFavorite',
+        email,
+        serviceId,
+        serviceName,
+      }),
     });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
+    }
+
+    // 캐시 무효화
+    const cacheKey = email.toLowerCase();
+    cachedFavorites.delete(cacheKey);
+    favoritesCacheTimestamp.delete(cacheKey);
+  } catch (error) {
+    console.error('즐겨찾기 추가 오류:', error);
+    throw error;
   }
 }
 
 // 즐겨찾기 삭제
 export async function removeFavorite(email: string, serviceId: string): Promise<void> {
-  mockFavorites = mockFavorites.filter(
-    f => !(f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId)
-  );
+  if (USE_MOCK) {
+    mockFavorites = mockFavorites.filter(
+      f => !(f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId)
+    );
+    return;
+  }
+
+  try {
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'removeFavorite',
+        email,
+        serviceId,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
+    }
+
+    // 캐시 무효화
+    const cacheKey = email.toLowerCase();
+    cachedFavorites.delete(cacheKey);
+    favoritesCacheTimestamp.delete(cacheKey);
+  } catch (error) {
+    console.error('즐겨찾기 삭제 오류:', error);
+    throw error;
+  }
 }
 
 // 사용자가 해당 서비스를 즐겨찾기했는지 확인
 export async function isFavorite(email: string, serviceId: string): Promise<boolean> {
-  return mockFavorites.some(
-    f => f.email.toLowerCase() === email.toLowerCase() && f.serviceId === serviceId
-  );
+  const favorites = await getFavorites(email);
+  return favorites.some(f => f.serviceId === serviceId);
 }
 
 // 사용자의 즐겨찾기 서비스 데이터 조회
@@ -327,28 +425,48 @@ export async function getFavoriteServices(email: string): Promise<ServiceData[]>
 
 // 전체 즐겨찾기 통계 (어드민용)
 export async function getFavoriteStats(): Promise<{ serviceId: string; serviceName: string; count: number; users: string[] }[]> {
-  const stats = new Map<string, { serviceName: string; count: number; users: string[] }>();
+  if (USE_MOCK) {
+    const stats = new Map<string, { serviceName: string; count: number; users: string[] }>();
 
-  mockFavorites.forEach(f => {
-    const existing = stats.get(f.serviceId);
-    if (existing) {
-      existing.count++;
-      existing.users.push(f.email);
-    } else {
-      stats.set(f.serviceId, {
-        serviceName: f.serviceName,
-        count: 1,
-        users: [f.email],
-      });
+    mockFavorites.forEach(f => {
+      const existing = stats.get(f.serviceId);
+      if (existing) {
+        existing.count++;
+        existing.users.push(f.email);
+      } else {
+        stats.set(f.serviceId, {
+          serviceName: f.serviceName,
+          count: 1,
+          users: [f.email],
+        });
+      }
+    });
+
+    return Array.from(stats.entries())
+      .map(([serviceId, data]) => ({
+        serviceId,
+        serviceName: data.serviceName,
+        count: data.count,
+        users: data.users,
+      }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  try {
+    const response = await fetch(`${APPS_SCRIPT_URL}?action=getAllFavorites`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+
+    if (!response.ok) {
+      throw new Error(`API 오류: ${response.status}`);
     }
-  });
 
-  return Array.from(stats.entries())
-    .map(([serviceId, data]) => ({
-      serviceId,
-      serviceName: data.serviceName,
-      count: data.count,
-      users: data.users,
-    }))
-    .sort((a, b) => b.count - a.count);
+    const result = await response.json();
+    return result.stats || [];
+  } catch (error) {
+    console.error('즐겨찾기 통계 조회 오류:', error);
+    return [];
+  }
 }
