@@ -103,31 +103,49 @@ export function SearchBox() {
     loadFavorites();
   }, [loadFavorites]);
 
-  // 즐겨찾기 토글
+  // 즐겨찾기 토글 (낙관적 업데이트)
   const toggleFavorite = async (service: ServiceData, e?: React.MouseEvent) => {
     e?.stopPropagation();
     const isFav = favorites.has(service.id);
 
+    // 즉시 UI 업데이트 (낙관적)
+    if (isFav) {
+      setFavorites(prev => {
+        const next = new Set(prev);
+        next.delete(service.id);
+        return next;
+      });
+      setFavoriteServices(prev => prev.filter(s => s.id !== service.id));
+    } else {
+      setFavorites(prev => new Set(prev).add(service.id));
+      setFavoriteServices(prev => [service, ...prev.filter(s => s.id !== service.id)]);
+    }
+
+    // 백그라운드에서 API 호출
     try {
       if (isFav) {
         await fetch(`/api/favorites?serviceId=${service.id}`, { method: 'DELETE' });
-        setFavorites(prev => {
-          const next = new Set(prev);
-          next.delete(service.id);
-          return next;
-        });
-        setFavoriteServices(prev => prev.filter(s => s.id !== service.id));
       } else {
         await fetch('/api/favorites', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ serviceId: service.id, serviceName: service.serviceName }),
         });
-        setFavorites(prev => new Set(prev).add(service.id));
-        setFavoriteServices(prev => [service, ...prev]);
       }
     } catch (error) {
       console.error('Toggle favorite error:', error);
+      // 실패 시 롤백
+      if (isFav) {
+        setFavorites(prev => new Set(prev).add(service.id));
+        setFavoriteServices(prev => [service, ...prev]);
+      } else {
+        setFavorites(prev => {
+          const next = new Set(prev);
+          next.delete(service.id);
+          return next;
+        });
+        setFavoriteServices(prev => prev.filter(s => s.id !== service.id));
+      }
     }
   };
 
