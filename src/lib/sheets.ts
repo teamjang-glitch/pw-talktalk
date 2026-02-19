@@ -314,7 +314,17 @@ export async function getFavorites(email: string): Promise<Favorite[]> {
     }
 
     const result = await response.json();
-    const favorites = result.favorites || [];
+    const rawFavorites = result.favorites || [];
+
+    // 중복 제거 (serviceId 기준)
+    const seen = new Set<string>();
+    const favorites = rawFavorites.filter((f: Favorite) => {
+      if (seen.has(f.serviceId)) {
+        return false;
+      }
+      seen.add(f.serviceId);
+      return true;
+    });
 
     // 캐시 저장
     cachedFavorites.set(cacheKey, favorites);
